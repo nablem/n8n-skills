@@ -40,3 +40,15 @@ Leverages LLM capabilities to automatically classify incoming support tickets by
 
 - **Action Tracking:** Logs whether tickets were escalated or queued, creating a complete audit trail of automated routing decisions.
 
+## Test Input
+
+```json
+{
+  "ticketId": "TICKET-001",
+  "customerEmail": "customer@example.com",
+  "subject": "Cannot access my account after password reset",
+  "message": "I reset my password 2 hours ago but still can't log in. I've tried 5 times and keep getting 'invalid credentials'. This is blocking my work.",
+  "submittedAt": "2024-02-08T10:30:00Z"
+}
+```
+
