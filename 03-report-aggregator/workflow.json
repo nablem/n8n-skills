@@ -1,0 +1,443 @@
+{
+  "name": "Scheduled Report Aggregator",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -272,
+        -64
+      ],
+      "id": "3c6b1c64-4159-418f-86f0-508b6643cc74",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n  {\n    region: \"North America\",\n    date: \"2024-02-07\",\n    orders: 145,\n    revenue: 285000,\n    avgOrderValue: 196.55,\n    topProduct: \"Widget Pro\"\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -48,
+        -256
+      ],
+      "id": "7ecabe33-adb7-4f4e-922f-9d92c1f5fc58",
+      "name": "Fetch Region A Sales"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n  {\n    region: \"Europe\",\n    date: \"2024-02-07\",\n    orders: 89,\n    revenue: 15200,\n    avgOrderValue: 170.79,\n    topProduct: \"Gadget Plus\"\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -48,
+        -64
+      ],
+      "id": "0b2c5b04-b51b-4798-b3db-f078eceab588",
+      "name": "Fetch Region B Sales"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n  {\n    region: \"Asia Pacific\",\n    date: \"2024-02-07\",\n    orders: 203,\n    revenue: 42100,\n    avgOrderValue: 207.39,\n    topProduct: \"Device Elite\"\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -48,
+        128
+      ],
+      "id": "12320ed9-0877-4a85-9c18-2c418860d1d8",
+      "name": "Fetch Region C Sales"
+    },
+    {
+      "parameters": {
+        "jsCode": "const allRegions = $input.all().map(item => item.json);\n\nconst totalOrders = allRegions.reduce((sum, r) => sum + r.orders, 0);\nconst totalRevenue = allRegions.reduce((sum, r) => sum + r.revenue, 0);\nconst avgOrderValue = totalRevenue / totalOrders;\n\n// Find best and worst performing regions\nconst bestRegion = allRegions.reduce((best, r) => \n  r.revenue > best.revenue ? r : best\n);\nconst worstRegion = allRegions.reduce((worst, r) => \n  r.revenue < worst.revenue ? r : worst\n);\n\n// Calculate variance from target (e.g., target is $80k daily)\nconst revenueTarget = 80000;\nconst targetVariance = ((totalRevenue - revenueTarget) / revenueTarget * 100).toFixed(2);\n\nconst report = {\n  reportDate: new Date().toISOString().split('T')[0],\n  generatedAt: new Date().toISOString(),\n  summary: {\n    totalOrders: totalOrders,\n    totalRevenue: totalRevenue,\n    avgOrderValue: parseFloat(avgOrderValue.toFixed(2)),\n    revenueTarget: revenueTarget,\n    targetVariance: parseFloat(targetVariance)\n  },\n  performance: {\n    bestRegion: {\n      name: bestRegion.region,\n      revenue: bestRegion.revenue,\n      orders: bestRegion.orders\n    },\n    worstRegion: {\n      name: worstRegion.region,\n      revenue: worstRegion.revenue,\n      orders: worstRegion.orders\n    }\n  },\n  regionalBreakdown: allRegions\n};\n\nreturn report;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        -64
+      ],
+      "id": "e6a015ce-3457-4b68-8cf4-cbdaef924363",
+      "name": "Aggregate Sales Metrics"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "d791f8e6-afdf-42ab-b2f2-03434d751720",
+              "leftValue": "={{ $json.summary.targetVariance < -5 || $json.summary.targetVariance > 10 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        624,
+        -64
+      ],
+      "id": "6625a853-6e98-48c3-8b43-79321664f52e",
+      "name": "Check if Report Should Send"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://httpbin.org/post",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        848,
+        -160
+      ],
+      "id": "94599a7a-5ff9-4dd5-8324-30a774d7fe10",
+      "name": "HTTP Request: Send Report"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "7df05437-9f0e-4e98-a7af-b0d173487c52",
+              "name": "status",
+              "value": "skipped",
+              "type": "string"
+            },
+            {
+              "id": "d8fe0cae-e043-4584-acb4-11496ddb08ee",
+              "name": "reason",
+              "value": "Within normal thresholds",
+              "type": "string"
+            },
+            {
+              "id": "cebbe6fe-3db8-4f17-8f93-40451d370180",
+              "name": "variance",
+              "value": "={{ $json.summary.targetVariance }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        848,
+        32
+      ],
+      "id": "476dda89-da50-4e62-9616-c341d68cf776",
+      "name": "Skip Report"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\n\nconst reportData = data.json || data;\n\nconst executionLog = {\n  executionId: `EXEC-${Date.now()}`,\n  executedAt: new Date().toISOString(),\n  reportDate: reportData.reportDate || new Date().toISOString().split('T')[0],\n  action: reportData.status === 'skipped' ? 'skipped' : 'sent',\n  summary: reportData.summary ? JSON.stringify(reportData.summary) : null,\n  skipReason: reportData.reason || null\n};\n\nreturn executionLog;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1296,
+        -64
+      ],
+      "id": "20feb5b3-536d-4b93-8c88-5121740eb745",
+      "name": "Prepare Execution Log"
+    },
+    {
+      "parameters": {
+        "numberInputs": 3
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        176,
+        -80
+      ],
+      "id": "b3507cdf-f17d-482c-939d-044cd2aa6cfb",
+      "name": "Merge Sales Sources"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1072,
+        -64
+      ],
+      "id": "5035cace-caf0-4ee3-b6bd-191c45a3ef4a",
+      "name": "Merge Execution Output",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "value": "HyhED1WwIFyTLwxx",
+          "mode": "list",
+          "cachedResultName": "report_executions",
+          "cachedResultUrl": "/projects/QoxKcDp95sacb8UV/datatables/HyhED1WwIFyTLwxx"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "executionId",
+              "displayName": "executionId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "executedAt",
+              "displayName": "executedAt",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "reportDate",
+              "displayName": "reportDate",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "action",
+              "displayName": "action",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "summary",
+              "displayName": "summary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "skipReason",
+              "displayName": "skipReason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1520,
+        -64
+      ],
+      "id": "654adadd-b20c-4766-9161-e26b5af42e94",
+      "name": "Log Execution"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Region A Sales",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Region B Sales",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Region C Sales",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Region C Sales": {
+      "main": [
+        [
+          {
+            "node": "Merge Sales Sources",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Fetch Region B Sales": {
+      "main": [
+        [
+          {
+            "node": "Merge Sales Sources",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Fetch Region A Sales": {
+      "main": [
+        [
+          {
+            "node": "Merge Sales Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Sales Metrics": {
+      "main": [
+        [
+          {
+            "node": "Check if Report Should Send",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check if Report Should Send": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request: Send Report",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip Report": {
+      "main": [
+        [
+          {
+            "node": "Merge Execution Output",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "HTTP Request: Send Report": {
+      "main": [
+        [
+          {
+            "node": "Merge Execution Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Sales Sources": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Sales Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Execution Output": {
+      "main": [
+        [
+          {
+            "node": "Prepare Execution Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Execution Log": {
+      "main": [
+        [
+          {
+            "node": "Log Execution",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "65aeffe7-c7ce-4481-a058-bedfb9a86e28",
+  "meta": {
+    "instanceId": "791daaee29f936192a60c2705fcf609b27dd2c5f6951b38d561ed3af61f00bdc"
+  },
+  "id": "ZV6dzyPfp3eXZ2gDVV-hk",
+  "tags": []
+}

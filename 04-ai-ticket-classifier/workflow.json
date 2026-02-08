@@ -1,0 +1,396 @@
+{
+  "name": "AI-Powered Customer Support Classifier",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "7e79ab86-f8d1-4fe5-9023-507b401d3d52",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        -16
+      ],
+      "id": "32e74554-7dbb-4930-8655-9a01ea6df1f2",
+      "name": "Receive Support Ticket",
+      "webhookId": "7e79ab86-f8d1-4fe5-9023-507b401d3d52"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "ANTHROPIC_API_KEY"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.apiBody }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        448,
+        -16
+      ],
+      "id": "c105d8e7-fbd4-4996-ae20-b449d78ecab5",
+      "name": "Categorize Ticket w/ Claude"
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst ticketData = $('Prepare AI Prompt & HTTP Body').first().json;\n\nconst aiText = response.content[0].text;\n\n// Extract JSON from markdown code block\nconst jsonMatch = aiText.match(/```json\\n([\\s\\S]*?)\\n```/);\nconst jsonString = jsonMatch ? jsonMatch[1] : aiText;\n\nconst classification = JSON.parse(jsonString);\n\nreturn {\n  ticketId: ticketData.ticketId,\n  customerEmail: ticketData.customerEmail,\n  urgency: classification.urgency,\n  category: classification.category,\n  reasoning: classification.reasoning,\n  classifiedAt: new Date().toISOString()\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        -16
+      ],
+      "id": "6497f02d-7c55-4f53-a3bc-2ce32e6a1c27",
+      "name": "Parse AI Classification"
+    },
+    {
+      "parameters": {
+        "jsCode": "const ticket = $input.first().json.body;\n\nconst prompt = `Analyze this customer support ticket and classify it.\n\nSubject: ${ticket.subject}\nMessage: ${ticket.message}\n\nRespond with ONLY a JSON object in this exact format:\n{\n  \"urgency\": \"HIGH\" or \"MEDIUM\" or \"LOW\",\n  \"category\": \"TECHNICAL\" or \"BILLING\" or \"ACCOUNT\" or \"GENERAL\",\n  \"reasoning\": \"brief explanation\"\n}`;\n\nreturn {\n  ticketId: ticket.ticketId,\n  customerEmail: ticket.customerEmail,\n  apiBody: {\n    model: \"claude-haiku-4-5-20251001\",\n    max_tokens: 1024,\n    messages: [\n      {\n        role: \"user\",\n        content: prompt\n      }\n    ]\n  },\n  originalTicket: ticket\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        -16
+      ],
+      "id": "ca3bd266-1fc4-4003-81bf-448b90c66dcc",
+      "name": "Prepare AI Prompt & HTTP Body"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "668ad1bd-ce4b-453b-a899-31b1d71b22f7",
+              "leftValue": "={{ $json.urgency === \"HIGH\" }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        896,
+        -16
+      ],
+      "id": "4c4e9d5f-5a95-4b89-9812-d130059c33a7",
+      "name": "Check Urgency Level"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1344,
+        -16
+      ],
+      "id": "825530d6-5cac-4082-aa2b-254b801b4ccf",
+      "name": "Merge",
+      "executeOnce": true,
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "jsCode": "// Use Code node instead of Set node\nconst data = $input.first().json;\n\nreturn {\n  ...data,\n  action: \"escalated\",\n  assignedTo: \"senior_support\",\n  priority: \"immediate\",\n  notifyVia: \"slack_and_email\"\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        -112
+      ],
+      "id": "8c34867e-f439-472b-9512-6ad1b3244415",
+      "name": "Escalate to Support Team"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\n\nreturn {\n  ...data,\n  action: \"queued\",\n  assignedTo: \"support_queue\",\n  priority: \"normal\",\n  notifyVia: \"email\"\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        80
+      ],
+      "id": "c09b343b-6f6a-4307-8029-f916ca9e0c0c",
+      "name": "Route to Standard Queue"
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "value": "ToBDYNFsEd6DO6OC",
+          "mode": "list",
+          "cachedResultName": "ticket_classifications",
+          "cachedResultUrl": "/projects/QoxKcDp95sacb8UV/datatables/ToBDYNFsEd6DO6OC"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {
+            "ticketId": "={{ $json.ticketId }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "ticketId",
+              "displayName": "ticketId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "customerEmail",
+              "displayName": "customerEmail",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "urgency",
+              "displayName": "urgency",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "reasoning",
+              "displayName": "reasoning",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "classifiedAt",
+              "displayName": "classifiedAt",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "action",
+              "displayName": "action",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "assignedTo",
+              "displayName": "assignedTo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "notifyVia",
+              "displayName": "notifyVia",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1568,
+        -16
+      ],
+      "id": "a6ba67e0-39b7-4c2d-adc5-0ca6601328ec",
+      "name": "Log Ticket Classification"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Receive Support Ticket": {
+      "main": [
+        [
+          {
+            "node": "Prepare AI Prompt & HTTP Body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Categorize Ticket w/ Claude": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Classification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare AI Prompt & HTTP Body": {
+      "main": [
+        [
+          {
+            "node": "Categorize Ticket w/ Claude",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Classification": {
+      "main": [
+        [
+          {
+            "node": "Check Urgency Level",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Urgency Level": {
+      "main": [
+        [
+          {
+            "node": "Escalate to Support Team",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Route to Standard Queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Escalate to Support Team": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route to Standard Queue": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Log Ticket Classification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "07caae76-e1bd-4d7f-9d1b-f0a3b94d1944",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "791daaee29f936192a60c2705fcf609b27dd2c5f6951b38d561ed3af61f00bdc"
+  },
+  "id": "DYQUBbG2BxYG_ozg-CTlP",
+  "tags": []
+}

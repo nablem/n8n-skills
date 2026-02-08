@@ -1,0 +1,450 @@
+{
+  "name": "Invoice Processing & Validation Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "63c89e5c-a76d-46a7-b185-9c2710d8e67f",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1504,
+        -192
+      ],
+      "id": "ab4f3eff-d02f-4562-9c83-3bed9c3481fa",
+      "name": "Webhook (receive invoice)",
+      "webhookId": "63c89e5c-a76d-46a7-b185-9c2710d8e67f"
+    },
+    {
+      "parameters": {
+        "jsCode": "const invoice = $input.first().json.body;\n\nconst errors = [];\nlet isValid = true;\n\nif (!invoice.invoiceNumber) {\n  errors.push(\"Missing invoiceNumber\");\n  isValid = false;\n}\n\nif (!invoice.customerName) {\n  errors.push(\"Missing customerName\");\n  isValid = false;\n}\n\nif (!invoice.date) {\n  errors.push(\"Missing date\");\n  isValid = false;\n} else {\n  const dateRegex = /^\\d{4}-\\d{2}-\\d{2}$/;\n  if (!dateRegex.test(invoice.date)) {\n    errors.push(\"Invalid date format, expected YYYY-MM-DD\");\n    isValid = false;\n  }\n}\n\nif (!invoice.items || !Array.isArray(invoice.items) || invoice.items.length === 0) {\n  errors.push(\"Missing or empty items array\");\n  isValid = false;\n}\n\nif (invoice.totalAmount === undefined || invoice.totalAmount === null) {\n  errors.push(\"Missing totalAmount\");\n  isValid = false;\n}\n\nif (invoice.items && Array.isArray(invoice.items) && invoice.totalAmount !== undefined) {\n  const calculatedTotal = invoice.items.reduce((sum, item) => sum + (item.amount || 0), 0);\n  if (calculatedTotal !== invoice.totalAmount) {\n    errors.push(`Total amount mismatch: calculated ${calculatedTotal}, provided ${invoice.totalAmount}`);\n    isValid = false;\n  }\n}\n\nreturn {\n  ...invoice,\n  isValid,\n  errors,\n  validatedAt: new Date().toISOString()\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1280,
+        -192
+      ],
+      "id": "345dd1f4-12e4-4f4e-b928-910e0626fc93",
+      "name": "Code (validate invoice data)"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\n\nreturn {\n  ...data,\n  status: \"rejected\",\n  errorCount: data.errors.length,\n  reviewRequired: true,\n  rejectedAt: $now.toISO()\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -832,
+        0
+      ],
+      "id": "35cc85de-b082-4a1a-b931-aedbaf75ba75",
+      "name": "Code (tag invoice in invalid)"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\n\nreturn {\n  ...data,\n  priority: \"normal\",\n  requiresApproval: false,\n  processedAt: $now.toISO()\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -608,
+        -288
+      ],
+      "id": "831469b0-a99a-4edf-b569-b417d017bb37",
+      "name": "Code (set priority: normal)"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\n\nreturn {\n  ...data,\n  priority: \"high\",\n  requiresApproval: true,\n  processedAt: $now.toISO()\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -608,
+        -480
+      ],
+      "id": "27869972-98e8-4cea-b63e-ad431b1f17e3",
+      "name": "Code (set priority: high)"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://httpbin.org/status/500",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -608,
+        -96
+      ],
+      "id": "885037c5-e565-433c-870c-9eedcc4334e5",
+      "name": "HTTP Request (notify X about invalid invoice)",
+      "retryOnFail": true,
+      "waitBetweenTries": 2000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://httpbin.org/status/200",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -608,
+        96
+      ],
+      "id": "24f49b2f-2cc1-4f48-8aeb-a8f6735a3491",
+      "name": "HTTP Request (notify Y about invalid invoice)",
+      "retryOnFail": true,
+      "waitBetweenTries": 2000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "d497c533-fc53-4ea7-a040-151e7c4bf45c",
+              "leftValue": "={{ $json.totalAmount >= 1000 }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -832,
+        -384
+      ],
+      "id": "c33e8b27-17b5-48b1-bffc-79caa3e7b33b",
+      "name": "If (invoice amount >= 1000)"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f45b921c-09ed-4edb-91e2-eb52fc0ac851",
+              "leftValue": "={{ $json.isValid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1056,
+        -192
+      ],
+      "id": "352a5bb2-d098-4673-a8b2-52c6e56ddf84",
+      "name": "If (check invoice validity)"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://httpbin.org/status/500",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -384,
+        -480
+      ],
+      "id": "5c765ffb-f8c5-49d0-be41-83d1febfd85b",
+      "name": "HTTP Request (notify about high priority invoice)",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://httpbin.org/status/200",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -384,
+        -288
+      ],
+      "id": "91f1176e-a808-481a-a53e-dd3a4a49065b",
+      "name": "HTTP Request (notify about normal priority invoice)",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "errorMessage": "=Failed to log valid invoice {{ $json.invoiceNumber }}"
+      },
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        -160,
+        -384
+      ],
+      "id": "6a7ed9a8-ce62-482e-ab95-24c251d4a5ec",
+      "name": "Throw Error (if notification fails)"
+    },
+    {
+      "parameters": {
+        "errorMessage": "=Failed to fully log invalid invoice {{ $json.invoiceNumber }}"
+      },
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        -384,
+        0
+      ],
+      "id": "032abca1-faef-4576-81f8-29c4e7797395",
+      "name": "Throw Error (if either fails)"
+    }
+  ],
+  "pinData": {
+    "Webhook (receive invoice)": [
+      {
+        "json": {
+          "headers": {
+            "host": "n8n.lemenuel.com",
+            "user-agent": "PostmanRuntime/7.51.1",
+            "content-length": "232",
+            "accept": "*/*",
+            "accept-encoding": "gzip, deflate, br",
+            "content-type": "application/json",
+            "postman-token": "b6cd137d-1d90-44e0-a1ae-98a06ea30a1f",
+            "x-forwarded-for": "159.26.105.67",
+            "x-forwarded-host": "n8n.lemenuel.com",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "f3f743a08527",
+            "x-real-ip": "159.26.105.67"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "invoiceNumber": "INV-001",
+            "date": "2024-02-07",
+            "customerName": "Acme Corp",
+            "items": [
+              {
+                "description": "Service A",
+                "amount": 1000
+              },
+              {
+                "description": "Service B",
+                "amount": 500
+              }
+            ],
+            "totalAmount": 1500
+          },
+          "webhookUrl": "https://n8n.lemenuel.com/webhook-test/63c89e5c-a76d-46a7-b185-9c2710d8e67f",
+          "executionMode": "test"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Webhook (receive invoice)": {
+      "main": [
+        [
+          {
+            "node": "Code (validate invoice data)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code (validate invoice data)": {
+      "main": [
+        [
+          {
+            "node": "If (check invoice validity)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code (tag invoice in invalid)": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request (notify X about invalid invoice)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HTTP Request (notify Y about invalid invoice)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code (set priority: normal)": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request (notify about normal priority invoice)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code (set priority: high)": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request (notify about high priority invoice)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request (notify X about invalid invoice)": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Throw Error (if either fails)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request (notify Y about invalid invoice)": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Throw Error (if either fails)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If (invoice amount >= 1000)": {
+      "main": [
+        [
+          {
+            "node": "Code (set priority: high)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code (set priority: normal)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If (check invoice validity)": {
+      "main": [
+        [
+          {
+            "node": "If (invoice amount >= 1000)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code (tag invoice in invalid)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request (notify about normal priority invoice)": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Throw Error (if notification fails)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request (notify about high priority invoice)": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Throw Error (if notification fails)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "pZkKGKDyiE8hCyh2HbyTa"
+  },
+  "versionId": "bd4d16af-4233-4dfe-aef2-12594c50ff7e",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "791daaee29f936192a60c2705fcf609b27dd2c5f6951b38d561ed3af61f00bdc"
+  },
+  "id": "uEN_Cgmp5J541pam7gIjQ",
+  "tags": []
+}

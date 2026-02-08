@@ -1,0 +1,376 @@
+{
+  "name": "Multi-System Data Sync with Conflict Resolution",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/15 * * * *"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -384,
+        -112
+      ],
+      "id": "33062136-9a84-4eda-9ef5-96ec829caf58",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "content": "## Notice the conflicts:\n\n- CUST-001: different email, newer timestamp in System B\n- CUST-002: different phone & credit limit, newer in System B\n- CUST-003: identical (no conflict)",
+        "height": 176,
+        "width": 480
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -272,
+        -416
+      ],
+      "typeVersion": 1,
+      "id": "58d9b2e3-3cb5-4760-8f11-3e1e92076f0d",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        64,
+        -112
+      ],
+      "id": "672b4bdb-2e67-447a-a5d0-c69b25904c42",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "const allItems = $input.all().map(item => item.json);\n\nconst systemAData = allItems.slice(0, 3);\nconst systemBData = allItems.slice(3, 6);\n\nconst conflicts = [];\n\nsystemAData.forEach((customerA, index) => {\n  const customerB = systemBData[index];\n  \n  const fieldsToCompare = ['name', 'email', 'phone', 'creditLimit'];\n  const differences = [];\n  \n  fieldsToCompare.forEach(field => {\n    if (customerA[field] !== customerB[field]) {\n      differences.push({\n        field: field,\n        systemA: customerA[field],\n        systemB: customerB[field]\n      });\n    }\n  });\n  \n  if (differences.length > 0) {\n    const dateA = new Date(customerA.lastModified);\n    const dateB = new Date(customerB.lastModified);\n    const newerSource = dateB > dateA ? 'systemB' : 'systemA';\n    \n    conflicts.push({\n      customerId: customerA.customerId,\n      differences: differences,\n      systemA: customerA,\n      systemB: customerB,\n      newerSource: newerSource,\n      conflictDetectedAt: new Date().toISOString()\n    });\n  }\n});\n\nreturn conflicts.length > 0 ? conflicts : [{ message: \"No conflicts detected\" }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        288,
+        -112
+      ],
+      "id": "89e3eeb6-4fd9-4038-8ed0-39b1f7c5e3d7",
+      "name": "Detect Conflicts"
+    },
+    {
+      "parameters": {
+        "jsCode": "const conflicts = $input.all().map(item => item.json);\n\nconst resolved = conflicts.map(conflict => {\n  const mergedCustomer = conflict.newerSource === 'systemB' \n    ? { ...conflict.systemB } \n    : { ...conflict.systemA };\n  \n  return {\n    customerId: conflict.customerId,\n    resolvedData: mergedCustomer,\n    resolution: {\n      strategy: \"newest_wins\",\n      chosenSource: conflict.newerSource,\n      fieldsUpdated: conflict.differences.map(d => d.field),\n      resolvedAt: new Date().toISOString()\n    },\n    originalConflict: conflict.differences\n  };\n});\n\nreturn resolved;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        512,
+        -112
+      ],
+      "id": "93d359f4-8bbc-42e3-a415-20f7071f7e88",
+      "name": "Resolve Conflicts (Newest Wins)"
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "https://httpbin.org/put",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.resolvedData }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        736,
+        -304
+      ],
+      "id": "493338a7-cd62-43cf-bac9-856141354eeb",
+      "name": "Update System A",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "https://httpbin.org/put",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.resolvedData }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        736,
+        -112
+      ],
+      "id": "1fc6ceec-0ff7-47b7-bbea-1a2ff4f447a8",
+      "name": "Update System B",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const resolved = $input.all().map(item => item.json);\n\nconst syncLog = {\n  syncId: `SYNC-${Date.now()}`,\n  syncedAt: new Date().toISOString(),\n  totalConflicts: resolved.length,\n  customersUpdated: JSON.stringify(resolved.map(r => ({\n    customerId: r.customerId,\n    fieldsUpdated: r.resolution.fieldsUpdated,\n    strategy: r.resolution.strategy,\n    chosenSource: r.resolution.chosenSource\n  }))),\n  status: \"completed\"\n};\n\nreturn syncLog;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        736,
+        80
+      ],
+      "id": "fd26f3b2-aeef-4d74-8765-1e6a94cf015f",
+      "name": "Prepare Log Data"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n  {\n    customerId: \"CUST-001\",\n    name: \"Acme Corp\",\n    email: \"contact@acme.com\",\n    phone: \"555-1234\",\n    creditLimit: 50000,\n    lastModified: \"2024-02-06T10:00:00Z\"\n  },\n  {\n    customerId: \"CUST-002\",\n    name: \"TechStart Inc\",\n    email: \"info@techstart.io\",\n    phone: \"555-5678\",\n    creditLimit: 25000,\n    lastModified: \"2024-02-05T14:30:00Z\"\n  },\n  {\n    customerId: \"CUST-003\",\n    name: \"Global Solutions Ltd\",\n    email: \"hello@globalsolutions.com\",\n    phone: \"555-9999\",\n    creditLimit: 100000,\n    lastModified: \"2024-02-07T09:15:00Z\"\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -160,
+        -208
+      ],
+      "id": "c06315ea-798a-4d91-a277-19dc95d253f1",
+      "name": "Fetch System A Customers [MOCKUP]"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n  {\n    customerId: \"CUST-001\",\n    name: \"Acme Corp\",\n    email: \"new-contact@acme.com\",\n    phone: \"555-1234\",\n    creditLimit: 50000,\n    lastModified: \"2024-02-07T11:00:00Z\"\n  },\n  {\n    customerId: \"CUST-002\",\n    name: \"TechStart Inc\",\n    email: \"info@techstart.io\",\n    phone: \"555-0000\",\n    creditLimit: 30000,\n    lastModified: \"2024-02-06T16:00:00Z\"\n  },\n  {\n    customerId: \"CUST-003\",\n    name: \"Global Solutions Ltd\",\n    email: \"hello@globalsolutions.com\",\n    phone: \"555-9999\",\n    creditLimit: 100000,\n    lastModified: \"2024-02-07T09:15:00Z\"\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -160,
+        -16
+      ],
+      "id": "de9963cf-c0be-4fcb-b163-3ef6604b0744",
+      "name": "Fetch System B Customers [MOCKUP]"
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "value": "auRw7KHlpvMe5A4G",
+          "mode": "list",
+          "cachedResultName": "conflict_log",
+          "cachedResultUrl": "/projects/QoxKcDp95sacb8UV/datatables/auRw7KHlpvMe5A4G"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "syncId",
+              "displayName": "syncId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "syncedAt",
+              "displayName": "syncedAt",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "totalConflicts",
+              "displayName": "totalConflicts",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "customersUpdated",
+              "displayName": "customersUpdated",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        960,
+        80
+      ],
+      "id": "43899131-6c91-4dab-9973-57c79626655d",
+      "name": "Log Sync Operation"
+    },
+    {
+      "parameters": {
+        "errorMessage": "Failed to update systems after conflict resolution"
+      },
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        960,
+        -208
+      ],
+      "id": "c83b50b3-8b79-4d6d-a61e-1c1f7b712216",
+      "name": "Update Failure"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch System A Customers [MOCKUP]",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch System B Customers [MOCKUP]",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Detect Conflicts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect Conflicts": {
+      "main": [
+        [
+          {
+            "node": "Resolve Conflicts (Newest Wins)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Conflicts (Newest Wins)": {
+      "main": [
+        [
+          {
+            "node": "Update System A",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Update System B",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Prepare Log Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Log Data": {
+      "main": [
+        [
+          {
+            "node": "Log Sync Operation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch System A Customers [MOCKUP]": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch System B Customers [MOCKUP]": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Update System B": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Update Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update System A": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Update Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "90089683-6fd8-4229-aa11-7b46d5db4f8c",
+  "meta": {
+    "instanceId": "791daaee29f936192a60c2705fcf609b27dd2c5f6951b38d561ed3af61f00bdc"
+  },
+  "id": "TVgUI9PH2vyqW5a8Pte67",
+  "tags": []
+}
