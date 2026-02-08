@@ -40,3 +40,25 @@ An automated gateway for incoming financial data that enforces strict validation
 
 - **Status Segmentation:** Dynamically separates valid datasets from "quarantined" records, ensuring only clean data reaches the downstream accounting systems.
 
+
+## Test Input
+
+```json
+{
+    "invoiceNumber": "INV-001", 
+    "date": "2024-02-07",
+    "customerName": "Acme Corp",
+    "items": [
+        { 
+            "description": "Service A", 
+            "amount": 1000
+        },
+        {
+            "description": "Service B", 
+            "amount": 500
+        }
+    ], 
+    "totalAmount": 1500
+}
+```
+
