@@ -1,94 +1,94 @@
-\# n8n ERP Integration Workflows
+# n8n ERP Integration Workflows
 
 
 
-\## Overview
+## Overview
 
 
 
 Three n8n workflows demonstrating skills relevant to ERP integration work:
 
-\- Data validation and transformation
+- Data validation and transformation
 
-\- Error handling with retry logic
+- Error handling with retry logic
 
-\- API integration and conflict resolution
+- API integration and conflict resolution
 
-\- Scheduled automation and reporting
+- Scheduled automation and reporting
 
-\- Audit logging
-
-
-
-\## Workflows
+- Audit logging
 
 
 
-\### 1. Invoice Processing \& Validation Pipeline
-
-\*\*Purpose:\*\* Validate incoming invoices, route by priority, log errors
-
-\*\*Skills:\*\* Data validation, conditional routing, parallel execution, error handling
-
-\[View Workflow](./01-invoice-processing/)
+## Workflows
 
 
 
-\### 2. Multi-System Data Sync with Conflict Resolution
+### 1. Invoice Processing & Validation Pipeline
 
-\*\*Purpose:\*\* Sync customer data between systems, detect and resolve conflicts
+**Purpose:** Validate incoming invoices, route by priority, log errors
 
-\*\*Skills:\*\* Data comparison, merge strategies, API orchestration, audit logging
+**Skills:** Data validation, conditional routing, parallel execution, error handling
 
-\[View Workflow](./02-multi-system-sync/)
-
-
-
-\### 3. Scheduled Report Aggregator
-
-\*\*Purpose:\*\* Daily sales reporting with threshold-based notifications
-
-\*\*Skills:\*\* Scheduled automation, data aggregation, conditional logic
-
-\[View Workflow](./03-report-aggregator/)
+[View Workflow](./01-invoice-processing/)
 
 
 
-\### 4. AI-Powered Support Ticket Classifier
+### 2. Multi-System Data Sync with Conflict Resolution
 
-\*\*Purpose:\*\* Automatically classify and route support tickets using LLM
+**Purpose:** Sync customer data between systems, detect and resolve conflicts
 
-\*\*Skills:\*\* LLM integration, prompt engineering, intelligent routing, API orchestration
+**Skills:** Data comparison, merge strategies, API orchestration, audit logging
 
-\[View Workflow](./04-ai-ticket-classifier/)
-
-
-
-\## How to Use
+[View Workflow](./02-multi-system-sync/)
 
 
 
-1\. Import JSON files into your n8n instance
+### 3. Scheduled Report Aggregator
 
-2\. Review the individual workflow READMEs for test payloads
+**Purpose:** Daily sales reporting with threshold-based notifications
 
-3\. Configure Data Tables if needed
+**Skills:** Scheduled automation, data aggregation, conditional logic
 
-
-
-\## Tech Stack
+[View Workflow](./03-report-aggregator/)
 
 
 
-\- n8n (self-hosted via Ansible)
+### 4. AI-Powered Support Ticket Classifier
 
-\- JavaScript (Code nodes)
+**Purpose:** Automatically classify and route support tickets using LLM
 
-\- HTTP Request nodes
+**Skills:** LLM integration, prompt engineering, intelligent routing, API orchestration
 
-\- Anthropic Claude API
+[View Workflow](./04-ai-ticket-classifier/)
 
-\- Data Tables for persistence
 
-\- Webhook and Schedule triggers
+
+## How to Use
+
+
+
+1. Import JSON files into your n8n instance
+
+2. Review the individual workflow READMEs for test payloads
+
+3. Configure Data Tables if needed
+
+
+
+## Tech Stack
+
+
+
+- n8n (self-hosted via Ansible)
+
+- JavaScript (Code nodes)
+
+- HTTP Request nodes
+
+- Anthropic Claude API
+
+- Data Tables for persistence
+
+- Webhook and Schedule triggers
 
